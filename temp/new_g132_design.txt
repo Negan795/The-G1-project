@@ -1,0 +1,438 @@
+
+
+1: Create a requirement sheet
+
+    Brainstorm about what ya want your CPU to do
+    Sort each point one by priority
+
+
+2: Make an "ISA guide" sheet
+
+    Start defining your ISAs corner specs (data bit width, neumann/harvard, ...)
+    DO NOT define details here like instructions. Ya can start thinking about how many ya need (e.g. how many bits for opcode, how many for register addresses, ...) but you do not define the exact registers and instructions here
+
+
+3: Make an ISA sheet
+
+    Make two categories: instructions and registers (for more advanced designs also interrupts, control flags, ...)
+
+    Brainstorm what you need for each category to satisfy your requirement sheet (e.g. instructions like ADD, RSW, ...)
+
+    Sort them in each category by priority again based on your requirement sheets points
+    Form the ISA based on your ISA guide and the sorted instructions, registers, ...
+    If you have e.g. 133 instructions in your instruction brainstorm but only 64 instruction spaces (opcodes): cut down the lower priority things
+    Define the instruction formats (e.g. ADD needs Trg, SrcA, SrcB and NOT needs only Trg and SrcA)
+    Cluster together instructions with similar instruction formats to later reduce decoder complexity
+    One method is to first sort the instructions by broad category (ALU instructions, memory instructions, program control instructions, ...) and then sort them more granular based on the used format
+
+
+
+
+1:	simple
+	
+	1. be easy to expand with different bit widths (???)
+
+	2. instructions must be simple, 1-2 cycle most
+
+	3. be pipelined
+
+	4. 16 general register, separate instruction to access special/control ones
+
+	5. basic cache (just dual port ram)
+
+	6. basic address translation
+
+
+2:	neumann
+
+	1. compatible between 16-32-64 bits
+
+	2. 5bits per register
+
+	3. isntruction id
+
+
+3:	isa guide
+
+	operations:
+
+		1. basic arithmetic
+
+		2. basic logic
+
+		3. branching
+
+		4. calling
+
+
+
+
+	register instructions:
+
+		1. move register
+
+		2. load immediate
+
+		3. store address
+
+		4. load address
+
+		5. stack push/pull
+
+		6. swap registers
+
+
+
+
+	interrupts:
+
+		1. unmasked external interrupt
+
+		2. masked external interrupt
+
+		3. software interrupt
+
+		4. timer interrupt
+
+
+	exceptions:
+
+		1. unpriviledged isntruction access (when in user mode)
+
+		2. out of bounds memory (only when virtual memory is enabled)
+
+		3. PC wrap around (0xffff->0x0000)
+
+
+
+
+
+	flags:
+
+		1. all interrupt flags
+			hardware interrupt
+			maskable interrupt
+			software interrupt
+
+		2. priviledged mode (0=kernel, 1=user)
+
+		3. hardware interrupt mask
+
+		4. software interrupt mask 
+
+		5. virtual memory on/off (0=off, 1=on)
+			maybe add multiple registers
+
+		6. mmu memory page (bit is the page number)
+
+		7. bit that decides if interrupt will go to physical memory or swap mmu page (0=physical address, 1=swap mmu)
+
+		8. stack pointer direction (0=increments, 1=decrements on write)
+
+		flag register layout:
+			0. priviledge level
+			1. virtual memory toggle
+			2. interrupt desitantion
+			3. stack pointer direction
+			4. system stack pointer direction
+			5.
+			6.
+			7.
+			8.
+			9. hardware interrupt mask
+			10. software interrupt mask
+
+		interrupt register layout
+			0. hardware
+			1. masked hardware
+			2. software
+
+			9. unpriviledged instruction access
+			10. out of bounds memory access
+			11. PC wrap
+
+
+
+
+
+
+ISA draft:
+
+
+	arithmetic:
+
+		ADD 		A, B
+		SUBTRACT	A, B
+		NEGATE		A
+
+
+	logic:
+
+		AND 		A, B
+		OR 			A, B
+		XOR 		A, B
+		NOT 		A
+		SHIFT L 	A, B
+		SHIFT R 	A, B
+		ROTATE L 	A
+		ROTATE R 	A
+			for shift:
+				has src 1 and 2 bc, if A=B than normal shift
+				if A!=B then shift out A, shift in B
+
+	branch:
+
+		UNCONDITIONAL REG 		A, condition
+		CONDITIONAL REG 		A, condition
+		
+		both branch and call, if A=PC, then address is immediate
+
+	calling:
+
+		UNCONDITIONAL REG 		A, condition
+		CONDITIONAL REG 		A, condition
+
+
+
+	register:
+
+		TRANSFER 		A, B
+		LOAD IMM 		A
+		STORE ADDR 		A (immediate = address)
+		LOAD ADDR 		A (immediate = address)
+		PUSH 			A
+		POP 			A
+		SWAP 			A, B
+		TRANSFER TO SPECIAL REGISTER 	A, B
+		TRANSFER FROM SPECIAL REGISTER  A, B
+		LOAD IMM SPECIAL REGISTER 		A, B
+		LOAD ADDR SPECIAL REGISTER 		A, B
+		STORE IMM 						A
+
+
+	interrupt:
+
+		SOFTWARE INTERRUPT
+
+
+
+	other behaviour specifications:
+
+		registers:
+			reg 0 is PC
+			others are general
+
+		special registers:
+			reg 0 model
+			reg 1 cpu frequency
+			reg 2 flags
+			reg 4 interrupts/exeptions
+			reg 5 timer controls
+			reg 6 MMU start address
+			reg 7 MMU stop address
+			reg 8 MMU offset
+			reg 9 unmasked hardware interrupt vector
+			reg 10 masked hardware interrupt vector
+			reg 11 software interrupt vector
+			reg 12 exception vector
+			reg 13 system stack pointer
+			reg 14 program stack pointer
+			reg 15 timer 0
+
+		MMU:
+			will add offset to current address
+			will check if under or over limits
+				if out of bounds, interrupt
+
+			will use upper 8bits and 256 word pages
+
+		interrupt behaviour:
+			inject software interrupt instead of the next instruction
+			add a modifier, this will tell it what to add to the PC
+			this way, interrupts will trigger instantly
+			do this for the exceptions as well
+
+			separate exeptions from interrupts
+				exeptions will save the PC at the moment where it happened + offset of the instruction
+					example: 5 stage pipeline, 3rd is memory access, 1st is decoder
+					if out of bound you save PC-3 to get the address of the instruction
+					if instruction is kernel while in usermode then save PC-1
+
+					the rest of the pipeline will be flushed, exept the instructions after the bad instruction
+					then normal interrupt takes over
+
+		cache:
+			internal 2 port ram, size idk, maybe 256
+			
+				use real address to load pages
+				load new page when program goes out
+				if a load instruction is out of cache, pass through instead of loading a page
+					same with store at address
+					same with stack
+					if store is inside the cached page, store both cache and main ram
+
+		branch conditions:
+			unconditional
+			if selected register is zero
+			if selected register is not zero
+			if selected register is greater than zero
+			if selected register is less than zero 
+			if selected register lsb is 1
+			if selected register msb-1 is 1
+			if selected register msb is 1
+
+
+
+	pipeline structure:
+		stage 1: fetch
+			load from memory, if interrupt/exeption load an interrupt
+
+		stage 2: decode
+			break down into signals that will activate the needed parts
+			check registers
+			check instruction and program priviledge, if bad then flush fetch
+			select registers that will be loaded
+				if the needed register is going to be written to,
+				select that as the register input
+			if the stack is needed, inc/dec it
+			select immediate data if needed and inject a NOP as next into the fetch unit
+
+		stage 3A: alu
+			execute alu instruction
+			write result directly to registers
+			mmu will tell it if out of bounds, if yes then read/write signals are blocked
+				if bad, flush fetch and decode
+
+		stage 3B: memory access
+			access memory
+			write data directly to registers
+			mmu will tell it if out of bounds, if yes then read/write signals are blocked
+				if bad, flush fetch and decode
+			check branch/call condition
+				if need to jump, flush fetch and decode and change PC
+
+
+
+
+
+isa instruction draft:
+
+	structure:
+
+		ID starts at MSB
+			not an instruction(nop): 0
+			16bit ID: 10
+			32bit ID: 110
+			64bit ID: 1110
+
+		registers:
+			from LSB, A then B
+
+	instructions:
+
+		ID--------------LSB---NAME
+		10 000000 BBBB AAAA : ADD
+		10 000001 BBBB AAAA : ADD AND INCREMENT
+		10 000010 BBBB AAAA : SUBTRACT
+		10 000011 BBBB AAAA : SUBTRACT AND BORROW
+		10 000100 BBBB AAAA : AND
+		10 000101 BBBB AAAA : OR
+		10 000110 BBBB AAAA : XOR
+		10 000111 BBBB AAAA : 
+		10 001000 BBBB AAAA : SHIFT L FROM B
+		10 001001 BBBB AAAA : SHIFT R FROM B
+		10 001010 BBBB AAAA : 
+
+		10 001111 0000 AAAA : ADD IMMEDIATE
+		10 001111 0001 AAAA : INCREMENT
+		10 001111 0010 AAAA : SUBTRACT IMMEDIATE
+		10 001111 0011 AAAA : DECREMENT
+		10 001111 0100 AAAA : NOT
+		10 001111 0101 AAAA : NEGATE	
+		10 001111 0110 AAAA : 
+		10 001111 0111 AAAA : 
+		10 001111 1000 AAAA : SHIFT L
+		10 001111 1001 AAAA : SHIFT R
+		10 001111 1010 AAAA : ARITHEMTIC RIGHT SHIFT
+
+
+		10 010000 BBBB AAAA : TRANSFER (B=source, A=destination)
+		10 010001 BBBB AAAA : 
+		10 010010 BBBB AAAA : 
+		10 010100 BBBB AAAA : 
+		10 010101 BBBB AAAA : 
+		10 010110 BBBB AAAA : 
+		10 010111 BBBB AAAA : 
+
+
+
+		10 011110 0000 AAAA : LOAD IMM
+		10 011110 0001 AAAA : LOAD ADDR
+		10 011110 0010 AAAA : STORE ADDR
+		10 011110 0011 AAAA : PUSH
+		10 011110 0100 AAAA : POP
+		10 011110 0101 AAAA : 
+		10 011110 0110 AAAA : 
+		10 011110 0111 AAAA : 
+		10 011110 1000 AAAA : 
+		10 011110 1001 AAAA : 
+		10 011110 1010 AAAA : 
+		10 011110 1011 AAAA : 
+		10 011110 1100 AAAA : 
+		10 011110 1101 AAAA : 
+		10 011110 1110 AAAA : 
+		10 011110 1111 AAAA : 
+
+
+
+		10 10 CCC BBBB AAAA : BRANCH
+		10 11 CCC BBBB AAAA : CALL
+
+		
+		10 011111 0000 0000 : SOFTWARE INTERRUPT
+		10 011111 0000 0001 : RETURN
+
+
+
+		PRIVILEDGED INSTRUCTIONS:
+		10 011000 BBBB AAAA : TRANSFER FROM SPECIAL REGISTER
+		10 011001 BBBB AAAA : TRANSFER TO SPECIAL REGISTER
+		10 011010 BBBB AAAA : 
+		10 011011 BBBB AAAA : 
+		10 011100 BBBB AAAA : 
+		10 011101 BBBB AAAA : 
+		10 011110 0000 AAAA : LOAD IMM SPECIAL REGISTER
+		10 011110 0001 AAAA : LOAD ADDR SPECIAL REGISTER
+		10 011110 0010 AAAA : STORE ADDR SPECIAL REGISTER
+		10 011110 0011 AAAA : 
+		10 011110 0100 AAAA : 
+		10 011110 0101 AAAA : 
+		10 011110 0110 AAAA : 
+		10 011110 0111 AAAA : 
+ 		10 011110 1000 AAAA : PUSH SYSTEM
+		10 011110 1001 AAAA : POP SYSTEM
+		10 011110 1010 AAAA : PUSH SPECIAL
+		10 011110 1011 AAAA : POP SPECIAL
+		10 011110 1100 AAAA : PUSH SYSTEM SPECIAL
+		10 011110 1101 AAAA : POP SYSTEM SPECIAL
+		10 011110 1110 AAAA : 
+		10 011110 1111 AAAA : 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+
+
+
+
+
+
+
+		
+
+
